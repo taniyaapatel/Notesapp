@@ -4,8 +4,9 @@
   "description": "A full-stack CRUD Notes App with Express, MongoDB, and modern UI",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "nodemon server.js",
     "dev": "nodemon server.js",
+    "build": "echo 'Build completed'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
