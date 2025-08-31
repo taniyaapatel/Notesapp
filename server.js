@@ -17,7 +17,7 @@ app.use(express.static('public'));
 // MongoDB Connection with better error handling
 const connectDB = async () => {
     try {
-        await mongoose.connect('process.env.MONGODB_URI', {
+        await mongoose.connect(process.env.MONGODB_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true
         });
