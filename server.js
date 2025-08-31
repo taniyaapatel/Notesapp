@@ -17,6 +17,10 @@ app.use(express.static('public'));
 // MongoDB Connection with better error handling
 const connectDB = async () => {
     try {
+        if (!process.env.MONGODB_URI) {
+            throw new Error('MONGODB_URI environment variable is not set');
+        }
+
         await mongoose.connect(process.env.MONGODB_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true
@@ -24,9 +28,19 @@ const connectDB = async () => {
         console.log('✅ Connected to MongoDB');
     } catch (err) {
         console.error('❌ MongoDB connection error:', err.message);
-        console.log('💡 Make sure MongoDB is running on your system');
-        console.log('💡 On Windows, MongoDB should start automatically if installed as a service');
-        console.log('💡 You can also try: mongod (in a separate terminal)');
+        console.error('🔍 Environment check:');
+        console.error('   - MONGODB_URI exists:', !!process.env.MONGODB_URI);
+        console.error('   - NODE_ENV:', process.env.NODE_ENV);
+
+        if (process.env.NODE_ENV === 'production') {
+            console.error('🚨 PRODUCTION ERROR: MongoDB connection failed in production environment');
+            console.error('💡 Check your Vercel environment variables');
+            console.error('💡 Ensure MONGODB_URI is set in Vercel dashboard');
+        } else {
+            console.log('💡 Make sure MongoDB is running on your system');
+            console.log('💡 On Windows, MongoDB should start automatically if installed as a service');
+            console.log('💡 You can also try: mongod (in a separate terminal)');
+        }
 
         // Continue running the server even if MongoDB fails
         // This allows the frontend to work (though notes won't be saved)
@@ -103,9 +117,12 @@ app.post('/api/notes', async (req, res) => {
     try {
         // Check if MongoDB is connected
         if (mongoose.connection.readyState !== 1) {
+            console.error('❌ Database connection not available. ReadyState:', mongoose.connection.readyState);
             return res.status(503).json({
                 message: 'Database not connected. Please ensure MongoDB is running.',
-                error: 'MongoDB connection not available'
+                error: 'MongoDB connection not available',
+                readyState: mongoose.connection.readyState,
+                environment: process.env.NODE_ENV || 'development'
             });
         }
 
@@ -123,13 +140,31 @@ app.post('/api/notes', async (req, res) => {
         });
 
         const savedNote = await newNote.save();
+        console.log('✅ Note created successfully:', savedNote._id);
         res.status(201).json(savedNote);
     } catch (error) {
-        console.error('Error creating note:', error);
+        console.error('❌ Error creating note:', error);
+
+        // Provide more specific error messages
+        let errorMessage = 'Error creating note';
+        let errorDetails = 'Unknown error occurred';
+
+        if (error.name === 'ValidationError') {
+            errorMessage = 'Validation error';
+            errorDetails = Object.values(error.errors).map(err => err.message).join(', ');
+        } else if (error.name === 'MongoError' || error.name === 'MongoServerError') {
+            errorMessage = 'Database error';
+            errorDetails = error.message;
+        } else if (error.message.includes('ECONNREFUSED')) {
+            errorMessage = 'Database connection refused';
+            errorDetails = 'MongoDB server is not accessible';
+        }
+
         res.status(500).json({
-            message: 'Error creating note',
+            message: errorMessage,
             error: error.message,
-            details: 'Check if MongoDB is running and accessible'
+            details: errorDetails,
+            environment: process.env.NODE_ENV || 'development'
         });
     }
 });
